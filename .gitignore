@@ -1,0 +1,15 @@
+# Real event data stays on this machine only (names, phone numbers, payments)
+/*.xlsx
+/*.xls
+/*.csv
+/*.docx
+seed.js
+about.txt
+
+.DS_Store
+.env*
+!.env.example
+node_modules/
+__pycache__/
+.venv/
+*.pem

@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Event Manager</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+<style>
+  :root { --bg:#faf6e4; --card:rgba(255,253,244,.95); --ink:#111; --muted:#6a5a4e; --line:#e8dcb0; --acc:#5b0e14; --red:#a3161f; --bone:#f1e194; --sand:#f1e194;
+    --serif:'Times New Roman Condensed','TimesNewRomanPS-CondensedMT','Times New Roman',Times,serif; --sans:'Akzidenz-Grotesk','Akzidenz-Grotesk Pro','Akzidenz Grotesk BQ','Helvetica Neue',Helvetica,Arial,sans-serif; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.45 var(--sans); background:var(--bg); color:var(--ink); }
+  header { position:sticky; top:0; z-index:5; background:var(--acc); color:var(--sand); box-shadow:0 2px 0 var(--sand); }
+  .topbar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:10px 22px; }
+  .brand, .actions { display:flex; align-items:center; gap:12px; min-width:0; }
+  #logo { height:46px; max-width:110px; object-fit:contain; background:#fff; border-radius:10px; padding:4px; }
+  .evswitch { display:flex; flex-direction:column; min-width:0; }
+  .eyebrow { font-size:10px; letter-spacing:.14em; text-transform:uppercase; opacity:.7; }
+  #evsel { appearance:none; -webkit-appearance:none; background:transparent; color:var(--sand); border:0; padding:0 20px 0 0; font-size:24px; font-weight:700; cursor:pointer;
+    max-width:min(52vw,560px); text-overflow:ellipsis; background-image:linear-gradient(45deg,transparent 50%,var(--sand) 50%),linear-gradient(135deg,var(--sand) 50%,transparent 50%);
+    background-position:calc(100% - 9px) 55%,calc(100% - 4px) 55%; background-size:5px 5px; background-repeat:no-repeat; }
+  #evsel option { color:var(--ink); background:#fff; font-family:var(--sans); font-size:15px; }
+  header button, header .btn { background:transparent; color:var(--sand); border:1px solid rgba(241,225,148,.45); border-radius:999px; padding:7px 14px; }
+  header button:hover, header .btn:hover, .menu summary:hover { background:rgba(241,225,148,.12); }
+  header .btn.primary { background:var(--sand); color:var(--acc); border-color:var(--sand); font-weight:700; }
+  header .toggle.warn { background:var(--red); border-color:var(--red); color:#fff; }
+  .menu { position:relative; }
+  .menu summary { list-style:none; cursor:pointer; padding:7px 14px; border:1px solid rgba(241,225,148,.45); border-radius:999px; white-space:nowrap; user-select:none; }
+  .menu summary::-webkit-details-marker { display:none; }
+  .menu[open] summary { background:rgba(241,225,148,.15); }
+  .menu .pop { position:absolute; top:calc(100% + 8px); left:0; min-width:230px; background:#fffdf3; border:1px solid var(--line); border-radius:12px; box-shadow:0 12px 30px rgba(40,5,10,.25); padding:6px; z-index:20; }
+  .menu.right .pop { left:auto; right:0; }
+  .menu .pop button { display:block; width:100%; text-align:left; background:transparent; color:var(--ink); border:0; border-radius:8px; padding:9px 12px; font-family:var(--sans); }
+  .menu .pop button:hover { background:#f6eecb; }
+  .menu .pop button.danger { color:var(--red); }
+  .menu .pop hr { border:0; border-top:1px solid var(--line); margin:4px 6px; }
+  .tabs { display:flex; align-items:flex-end; gap:4px; padding:0 22px; border-top:1px solid rgba(241,225,148,.18); }
+  .ph { background:transparent; color:var(--sand); border:0; border-bottom:3px solid transparent; border-radius:0; padding:10px 16px 9px; font-size:18px; font-weight:700; opacity:.7; cursor:pointer; }
+  .ph:hover { opacity:1; }
+  .ph.on { opacity:1; border-bottom-color:var(--sand); }
+  .ph.tpl { margin-left:auto; font-size:15px; font-weight:600; }
+  #wm { position:fixed; inset:120px 0 0 0; background:center/min(55vw,520px) no-repeat; opacity:.08; pointer-events:none; z-index:0; }
+  .btn, button { font:inherit; cursor:pointer; border:1px solid var(--line); background:#fffbe9; color:var(--ink); border-radius:8px; padding:6px 12px; }
+  .btn.primary, button.primary { background:var(--acc); color:var(--sand); border-color:var(--acc); }
+  main { position:relative; z-index:1; padding:18px; max-width:1400px; margin:auto; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-left:4px solid var(--acc); border-radius:10px; padding:10px 12px; }
+  .stat.warn { border-left-color:var(--red); }
+  .stat b { display:block; color:var(--acc); }
+  .stat span { color:var(--muted); font-size:12px; }
+  nav.sub { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:12px; }
+  nav.sub button.on { background:var(--acc); color:var(--bone); border-color:var(--acc); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:12px; }
+  .card h3, h2, .stat b, #evsel, .ph, .num { font-family:var(--serif); font-stretch:condensed; letter-spacing:-.01em; }
+  .card h3 { margin:0 0 8px; font-size:19px; color:var(--acc); }
+  .stat b { font-size:24px; }
+  h4 { margin:10px 0 4px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  .muted { color:var(--muted); font-weight:400; font-size:12px; }
+  .empty { color:var(--muted); text-align:center; padding:18px; }
+  .tw { overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; }
+  th { text-align:left; font-size:12px; color:var(--muted); font-weight:600; padding:6px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  td { padding:3px 6px; border-bottom:1px solid #f1e9c8; vertical-align:top; }
+  td input:not([type=checkbox]), td select, td textarea { width:100%; border:1px solid transparent; background:transparent; padding:4px 5px; border-radius:6px; font:inherit; color:var(--ink); }
+  td input:hover, td textarea:hover, td input:focus, td textarea:focus { border-color:var(--line); background:#fff; }
+  td textarea { resize:vertical; min-width:200px; }
+  input[type=checkbox] { width:17px; height:17px; accent-color:var(--acc); }
+  .x { border:0; color:#b9ab8a; font-size:18px; padding:0 6px; background:none; }
+  .x:hover { color:var(--red); }
+  .add { margin-top:8px; border-style:dashed; color:var(--muted); }
+  .prog { margin:6px 0 12px; }
+  .prog-l { font-size:12px; color:var(--muted); }
+  .track { height:8px; background:#ece2b8; border-radius:99px; overflow:hidden; }
+  .track i { display:block; height:100%; background:var(--acc); }
+  .grid2 { display:grid; grid-template-columns:1fr 300px; gap:14px; align-items:start; }
+  aside { position:sticky; top:130px; }
+  aside input, aside button, aside textarea { width:100%; margin:3px 0; padding:7px; border:1px solid var(--line); border-radius:8px; font:inherit; }
+  aside label { display:block; margin-top:10px; font-weight:600; font-size:12px; }
+  .form { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:10px; }
+  .form label { font-size:12px; font-weight:600; color:var(--muted); }
+  .form input, .form textarea { display:block; width:100%; padding:7px; border:1px solid var(--line); border-radius:8px; font:inherit; background:#fff; margin-top:3px; }
+  details.sess { padding:0; }
+  details.sess summary { list-style:none; cursor:pointer; padding:10px 14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  details.sess summary::-webkit-details-marker { display:none; }
+  details.sess summary::before { content:'▸'; color:var(--acc); }
+  details.sess[open] summary::before { content:'▾'; }
+  details.sess .body { padding:0 14px 12px 40px; }
+  details.sess.live { border-color:var(--red); box-shadow:0 0 0 3px var(--sand); }
+  details.sess.done summary { opacity:.55; }
+  .num { display:inline-grid; place-items:center; width:26px; height:26px; border-radius:50%; background:var(--acc); color:var(--bone); font-weight:700; font-size:12px; }
+  .sess .time { min-width:140px; font-weight:600; }
+  .sess .what { flex:1; min-width:180px; }
+  .checks { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:4px 12px; }
+  .checks label { display:flex; gap:6px; align-items:center; }
+  .checks input[type=text] { border:1px dashed var(--line); border-radius:8px; padding:4px 8px; font:inherit; }
+  .row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .row input, .row select { padding:5px 7px; border:1px solid var(--line); border-radius:6px; font:inherit; }
+  .body textarea { width:100%; border:1px solid var(--line); border-radius:8px; padding:6px; font:inherit; margin-top:6px; }
+  .groups { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px; }
+  .groups .card { margin:0; }
+  .groups ul { margin:0; padding-left:18px; }
+  .pay .sh { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .pay.done { opacity:.6; }
+  .pay input[type=number] { width:110px; padding:4px; border:1px solid var(--line); border-radius:6px; }
+  .pay pre { white-space:pre-wrap; font:12px/1.4 var(--sans); background:#fbf5da; padding:8px; border-radius:8px; }
+  .pay .log { width:100%; margin-top:6px; padding:6px 8px; border:1px dashed var(--line); border-radius:8px; font:inherit; }
+  .summary { display:flex; gap:18px; flex-wrap:wrap; background:#f6eecb; padding:10px 12px; border-radius:10px; margin-bottom:10px; }
+  .pill { display:inline-block; padding:2px 10px; border-radius:99px; font-size:12px; font-weight:600; white-space:nowrap; }
+  .pill.ok { background:var(--acc); color:var(--bone); }
+  .pill.no { background:#fbe3e0; color:var(--red); }
+  .pill.st { background:#f4ebc4; color:var(--ink); }
+  .onb td { vertical-align:middle; padding:6px; }
+  .onb td.c, .onb th.c { text-align:center; }
+  .onb input[type=checkbox] { width:22px; height:22px; }
+  .onb input[type=number] { width:110px; padding:4px; border:1px solid var(--line); border-radius:6px; }
+  .tickbox { display:inline-grid; place-items:center; width:22px; height:22px; border-radius:5px; background:var(--acc); color:#fff; font-weight:800; font-size:14px; }
+  .onb tr.ready td { background:#f7f0d2; }
+  .setup { border:2px dashed var(--acc); text-align:center; padding:28px; }
+  .alert { border-left:4px solid var(--red); }
+  code { background:#f4ebc4; padding:1px 5px; border-radius:4px; font-size:12px; }
+  dialog { border:0; border-radius:14px; padding:22px; max-width:540px; background:var(--bg); color:var(--ink); font-family:var(--sans); }
+  dialog::backdrop { background:rgba(30,5,8,.55); }
+  dialog h3 { font-family:var(--serif); color:var(--acc); font-size:22px; margin-top:0; }
+  dialog #dupname { display:block; width:100%; padding:8px; margin-top:4px; border:1px solid var(--line); border-radius:8px; font:inherit; font-size:16px; }
+  dialog .opt { display:flex; gap:8px; align-items:flex-start; margin:8px 0; padding:10px; border:1px solid var(--line); border-radius:10px; background:#fffdf3; cursor:pointer; }
+  .savebar { display:flex; align-items:center; gap:12px; margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); flex-wrap:wrap; }
+  .savebar .add { margin-top:0; }
+  .savebar .saved { margin-left:auto; color:var(--acc); font-size:13px; font-weight:600; }
+  .savebar .saved.dirty { color:var(--red); }
+  #toast { position:fixed; bottom:18px; right:18px; background:var(--ink); color:var(--bone); padding:12px 16px; border-radius:10px; white-space:pre-line; max-width:460px; display:none; z-index:9; }
+  @media (max-width:900px) { .grid2 { grid-template-columns:1fr; } aside { position:static; } .topbar { flex-wrap:wrap; } .tabs { overflow-x:auto; } .ph { white-space:nowrap; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="topbar">
+    <div class="brand">
+      <img id="logo" alt="" hidden>
+      <div class="evswitch"><span class="eyebrow">Event</span><select id="evsel" aria-label="Current event"></select></div>
+      <details class="menu"><summary title="New, duplicate, rename, delete">Manage ▾</summary><div class="pop">
+        <button data-act="addevent">＋ New event</button>
+        <button data-act="dupevent">⧉ Duplicate this event</button>
+        <button data-act="rename">✎ Rename</button>
+        <hr><button data-act="delevent" class="danger">🗑 Delete event</button>
+      </div></details>
+    </div>
+    <div class="actions">
+      <button data-act="reveal" id="reveal" class="toggle" title="Display mode hides all payment info, for projecting at the event"></button>
+      <label class="btn primary">⬆ Import<input type="file" id="file" multiple accept=".xlsx,.xls,.csv,.docx,.json" hidden></label>
+      <details class="menu right"><summary title="Backup, reset" aria-label="More">⋯</summary><div class="pop">
+        <button data-act="export">⬇ Backup (download data)</button>
+        <hr><button data-act="reset" class="danger">↺ Reset event</button>
+      </div></details>
+    </div>
+  </div>
+  <nav id="phases" class="tabs"></nav>
+  <input type="file" id="logofile" accept="image/*" hidden>
+</header>
+<div id="wm"></div>
+<main id="app"></main>
+<div id="toast"></div>
+<dialog id="dupdlg"><form method="dialog">
+  <h3>Duplicate “<span id="dupsrc"></span>”</h3>
+  <label>New event name<input id="dupname" required></label>
+  <p><b>What to copy?</b></p>
+  <label class="opt"><input type="radio" name="dupmode" value="empty" checked> <span><b>Empty</b>: only logo + venue details. Fill everything by importing sheets.</span></label>
+  <label class="opt"><input type="radio" name="dupmode" value="structure"> <span><b>Structure</b>: logistics checklists, agenda with requirements, meal times, post-production checklist, budget lines, asset list, venue details. Everything unticked.<br><span class="muted">No people, payments, feedback, follow-ups or media.</span></span></label>
+  <p class="muted">Importing sheets? Choose Empty, otherwise the imported agenda and checklists are added on top of the copied ones.<br>Dates are cleared in both cases. You can rename the event any time.</p>
+  <div class="row" style="justify-content:flex-end"><button value="cancel" formnovalidate>Cancel</button><button value="ok" class="primary">Duplicate</button></div>
+</form></dialog>
+
+<script src="seed.js"></script>
+<script id="core">
+// ================= state =================
+// Each event is stored under its own key; IDX lists events and remembers the open one.
+const IDX = 'eventmgr.v2', EVK = id => 'eventmgr.ev.' + id;
+const store = typeof localStorage !== 'undefined' ? localStorage : { getItem() {}, setItem() {}, removeItem() {} };
+const uid = () => Math.random().toString(36).slice(2, 9);
+const load = (k, d) => { try { return JSON.parse(store.getItem(k)) ?? d; } catch { return d; } };
+
+const DEFAULT_POST = [
+  'Send thank-you message to all participants', 'Share photo + video Drive link with participants', 'Send feedback form',
+  'Collect pending payments', 'Process refunds', 'Settle venue / vendor bills', 'Return rented equipment',
+  'Pack back and check all equipment (see Logistics wrap-up)', 'Back up all raw photos + videos (Drive + SSD)',
+  'Edit and publish testimonials', 'Publish event recap post / reel', 'Send certificates (if any)',
+  'Team debrief: what worked, what to fix', 'Update participant records', 'Close event budget (actual vs estimated)',
+];
+const INFO = [['venue', 'Venue'], ['location', 'Location'], ['start', 'From (start date)', 'date'], ['end', 'To (end date)', 'date'], ['food', 'Food service'], ['checkin', 'Check-in time'],
+  ['checkout', 'Check-out time'], ['hospital', 'Nearest hospital / clinic'], ['venueContact', 'Venue / resort contact'], ['lead', 'Event lead'], ['notes', 'Notes']];
+const blank = () => ({ event: 'New event', logo: '', info: {}, people: [], logistics: [], budget: [], agenda: [], meals: [], incidents: [], followups: [],
+  feedback: [], checklist: DEFAULT_POST.map(text => ({ id: uid(), text, done: false })), photos: [], videos: [], testimonials: [], assets: [] });
+// Logistics side: groups starting with "SE" (and anything with a named owner, i.e. a team task) are the organiser's; the rest is for participants.
+const sideOf = (group, who) => /^se\b/i.test(group || '') || who ? 'Organiser' : 'Participant';
+function hydrate(o) { // fill missing sections + upgrade data saved by older versions
+  const s = Object.assign(blank(), o || {});
+  if (s.requests) { s.followups.push(...s.requests.map(r => ({ ...r, reason: r.reason ?? r.text }))); delete s.requests; }
+  for (const x of s.logistics) x.side ??= sideOf(x.group, x.who);
+  if (s.info.dates && !s.info.start) { // old free-text dates -> calendar fields
+    if (s.seeded && typeof SEED !== 'undefined') Object.assign(s.info, { start: SEED.info.start, end: SEED.info.end });
+    else s.info.notes = [s.info.notes, 'Dates: ' + s.info.dates].filter(Boolean).join('\n');
+    delete s.info.dates;
+  }
+  for (const p of s.people) if (p.fee != null && p.pending == null) { p.pending = Math.max(0, p.fee - (p.paid || 0)); delete p.fee; }
+  return s;
+}
+// What a duplicated event keeps (with these fields reset). People, payments, follow-ups, feedback, incidents, testimonials are never copied.
+const DUP_RESET = { logistics: { done: false, returned: false, wrapNotes: '' }, agenda: { status: 'Upcoming', notes: '', std: {} }, meals: { served: false, count: null },
+  checklist: { done: false, notes: '' }, budget: { actual: null, paidOut: false }, assets: { out: false, returned: false, condition: '' },
+  photos: { collected: false, scaled: false, uploaded: false, link: '', count: null }, videos: { collected: false, edited: false, uploaded: false, link: '' } };
+function duplicateEvent(src, name, keepStructure) {
+  const d = Object.assign(blank(), { event: name, logo: src.logo, info: { ...src.info, start: '', end: '' } });
+  if (keepStructure) for (const [k, reset] of Object.entries(DUP_RESET))
+    d[k] = structuredClone(src[k] || []).map(x => ({ ...x, ...reset, id: uid(), ...(x.needs ? { needs: x.needs.map(n => ({ t: n.t, done: false })) } : {}) }));
+  return d;
+}
+const seed = () => typeof SEED !== 'undefined' ? Object.assign(hydrate(structuredClone(SEED)), { seeded: true }) : blank();
+let index = load(IDX, null);
+if (!index) { const id = uid(), data = seed(); index = { current: id, events: [{ id, name: data.event }] }; store.setItem(EVK(id), JSON.stringify(data)); store.setItem(IDX, JSON.stringify(index)); }
+let S = hydrate(load(EVK(index.current), {}));
+let lastSaved = null;
+function save() {
+  try {
+    store.setItem(EVK(index.current), JSON.stringify(S));
+    lastSaved = new Date(); if (typeof markSaved === 'function') markSaved();
+    index.events.find(e => e.id === index.current).name = S.event;
+    store.setItem(IDX, JSON.stringify(index));
+  } catch (e) { if (typeof toast === 'function') toast('Could not save: browser storage is full. Take a Backup and delete old events.'); }
+}
+function switchTo(id) { save(); index.current = id; S = hydrate(load(EVK(id), {})); save(); }
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const num = v => { if (typeof v === 'number') return v; const m = String(v ?? '').replace(/,/g, '').match(/-?\d+(\.\d+)?/); return m ? +m[0] : null; };
+const norm = s => String(s ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+const nkey = s => norm(s).replace(/[^a-z0-9]/g, '');
+const ph = v => String(v ?? '').replace(/\D/g, '').slice(-10);
+const cnt = (a, f) => a.filter(x => x[f]).length;
+const sum = (a, f) => a.reduce((t, x) => t + (num(x[f]) || 0), 0);
+
+// ================= import =================
+// Every sheet, CSV, Word table and Word list goes through importRows. A header row decides what the rows below it are.
+const YES = /^(y|yes|true|done|ok|✓|✔|1)$/i;
+const NAMEISH = /^(your |full )*name|^person|^participant/;
+const PF = [ // participant sheet header -> field; first match wins, order matters
+  ['emergency', /emergency/], ['medical', /medical|allerg|health|medication|blood/], ['food', /food|diet|veg/],
+  ['whatsapp', /whats.?app.*group|added to whats/], ['formSent', /form sent/], ['formFilled', /form filled|contact info/],
+  ['paymentDone', /payment (completed|done)|fully paid/], ['agreementSent', /agreement sent/], ['agreementFilled', /agreement (filled|signed)/],
+  ['phone', /phone|mobile|whats/], ['email', /mail/], ['proof', /screenshot|proof|receipt/], ['pending', /pending|balance/],
+  ['paid', /paid|collected/], ['fee', /fee|price/], ['list', /ticket|^list/], ['role', /^role/], ['checkedIn', /check.?in/], ['checkedOut', /check.?out/],
+  ['block', /block|room type|villa|cottage/], ['goal', /goal|business|about/], ['room', /room/], ['size', /size|t.?shirt/],
+  ['team', /team/], ['gender', /gender|sex/], ['notes', /note|update|remark|comment/],
+];
+const PBOOL = new Set(['whatsapp', 'formSent', 'formFilled', 'paymentDone', 'agreementSent', 'agreementFilled', 'checkedIn', 'checkedOut']);
+// Simple one-row-per-item sections. `test` spots the header row, `f` maps header -> field.
+const MODES = [
+  { coll: 'feedback', label: 'feedback items', test: h => h.some(x => NAMEISH.test(x)) && h.some(x => /feedback|rating|quer|suggest|\brate\b/.test(x)),
+    f: [['person', NAMEISH], ['source', /source|channel|^from/], ['type', /^type|categ/], ['rating', /rating|\brate\b/], ['date', /date|timestamp/], ['status', /status/]], rest: 'text', nums: ['rating'], def: { status: 'New', type: 'Feedback' } },
+  { coll: 'followups', label: 'follow-ups', test: h => h.some(x => /^reason/.test(x)),
+    f: [['person', NAMEISH], ['phone', /phone|mobile/], ['reason', /^reason/], ['owner', /owner|assigned/], ['due', /due/], ['status', /status/], ['notes', /note/]], def: { status: 'Open' } },
+  { coll: 'incidents', label: 'incidents', test: h => h.some(x => /incident|what happened/.test(x)),
+    f: [['person', NAMEISH], ['when', /time|date|when/], ['what', /what happened|incident|issue/], ['action', /action/], ['status', /status/], ['notes', /note/]], def: { status: 'Open' } },
+  { coll: 'meals', label: 'meals', test: h => h.includes('meal') && h.includes('time'),
+    f: [['day', /^day/], ['meal', /^meal/], ['time', /^time/], ['service', /service/], ['nonveg', /non.?veg/], ['veg', /^veg/], ['menu', /menu|items/], ['venue', /venue|where|place/], ['count', /head|count/], ['served', /served/]],
+    bools: ['veg', 'nonveg', 'served'], nums: ['count'] },
+  { coll: 'assets', label: 'assets', test: h => h.some(x => /^asset/.test(x)),
+    f: [['item', /^asset|^item/], ['category', /categ/], ['qty', /qty|quant/], ['owner', /owner|who/], ['out', /taken|out/], ['returned', /return/], ['condition', /condition/], ['notes', /note/]],
+    bools: ['out', 'returned'], nums: ['qty'] },
+  { coll: 'photos', label: 'photo batches', test: h => h.includes('batch') && h.some(x => /scaled/.test(x)),
+    f: [['label', /^batch/], ['owner', /owner/], ['collected', /collect/], ['scaled', /scaled/], ['uploaded', /upload/], ['link', /link|url/]], bools: ['collected', 'scaled', 'uploaded'] },
+  { coll: 'videos', label: 'videos', test: h => h.some(x => /^video/.test(x)) && h.some(x => /^edited/.test(x)),
+    f: [['label', /^video/], ['owner', /editor|owner/], ['collected', /footage|collect/], ['edited', /^edited/], ['uploaded', /upload/], ['link', /link|url/]], bools: ['collected', 'edited', 'uploaded'] },
+  { coll: 'testimonials', label: 'testimonials', test: h => h.some(x => NAMEISH.test(x)) && h.some(x => /^recorded/.test(x)),
+    f: [['person', NAMEISH], ['day', /^day/], ['recorded', /^recorded/], ['edited', /^edited/], ['uploaded', /upload/], ['link', /link|url/]], bools: ['recorded', 'edited', 'uploaded'] },
+  { coll: 'checklist', label: 'post-event tasks', test: h => h.some(x => /post.?event task/.test(x)),
+    f: [['text', /task/], ['owner', /owner|who/], ['due', /due/], ['done', /^done/]], bools: ['done'] },
+];
+const LABELS = { same: 'rows already imported (skipped)', people: 'new people', updated: 'people updated', agenda: 'sessions', logistics: 'logistics items', budget: 'budget lines', info: 'event info fields',
+  ...Object.fromEntries(MODES.map(m => [m.coll, m.label])) };
+
+function idx(low, spec) {
+  const m = {};
+  for (const [f, re] of Object.entries(spec)) { const i = low.findIndex(x => re.test(x)); if (i >= 0) m[f] = i; }
+  return m;
+}
+function excelTime(v) {
+  if (typeof v !== 'number' || v >= 1) return v ?? '';
+  const m = Math.round(v * 1440);
+  return `${(Math.floor(m / 60) + 11) % 12 + 1}:${String(m % 60).padStart(2, '0')} ${m < 720 ? 'AM' : 'PM'}`;
+}
+const dateText = v => typeof v !== 'number' ? String(v ?? '').trim() : v < 1 ? excelTime(v)
+  : new Date(Math.round((v - 25569) * 864e5)).toISOString().slice(0, 16).replace('T', ' ').replace(' 00:00', '');
+
+function importRows(rows, sheet, c, file = '') {
+  const T = r => (r || []).map(v => v == null ? '' : String(v).trim());
+  let mode = null, title = '', map = {}, blocks = [], gap = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const raw = rows[i] || [], r = T(raw), low = r.map(x => x.toLowerCase()), filled = r.filter(Boolean);
+    if (!filled.length) { if (++gap >= 2 && mode === 'people') mode = null; continue; } // blank gap ends a people table
+    gap = 0;
+    // ---- header rows switch the mode ----
+    const gm = MODES.find(m => m.test(low));
+    if (low.includes('field') && low.includes('value')) { mode = 'info'; map = idx(low, { k: /^field/, v: /^value/ }); continue; }
+    if (gm) { mode = { ...gm, cols: colMap(low, gm.f), hdr: r }; continue; }
+    if (low.includes('time') && low.some(x => x.startsWith('what'))) { mode = 'agenda'; map = idx(low, { day: /^day/, time: /^time$/, what: /^what/, who: /^who/, needs: /need|required|material|things/ }); continue; }
+    if (low.some(x => /^task/.test(x)) && low.some(x => /^who/.test(x))) { mode = 'logi'; map = idx(low, { text: /^task/, who: /^who/, ready: /ready|done when|note/, group: /^group|section|categ/, qty: /qty|quant/, side: /^(for|side|checklist)$/ }); continue; }
+    if (low.some(x => /^(item|expense|particulars?)$/.test(x)) && low.some(x => /cost|amount|estimate|budget/.test(x))) { mode = 'budget'; map = idx(low, { item: /^(item|expense|particular)/, category: /categ|head/, est: /estim|budget|cost|amount/, actual: /actual|spent/, paidOut: /paid out|settled/, notes: /note/ }); continue; }
+    if (low.includes('name')) { mode = 'people'; blocks = peopleBlocks(low, T(rows[i - 1])); continue; }
+    if (r.some(x => /\(example\)/i.test(x))) continue; // template example rows
+
+    // ---- data rows ----
+    if (mode === 'people') { for (const b of blocks) personRow(raw, r, b, sheet, c); continue; }
+    if (typeof mode === 'object' && mode) { genericRow(mode, raw, r, title, file ? `${file} › ${sheet}` : sheet, c); continue; }
+    if (mode === 'info') { setInfo(r[map.k], raw[map.v], c); continue; }
+    if (filled.length === 1) { title = filled[0]; continue; } // section title, e.g. "DAY 2, THU 19 NOV"
+    if (mode === 'agenda') {
+      const what = r[map.what] || '', time = excelTime(raw[map.time]), day = r[map.day] || title;
+      if (!what && !time) continue;
+      if (S.agenda.some(s => s.day === day && s.time === time && s.what === what)) { c.same = (c.same || 0) + 1; continue; }
+      const needs = (r[map.needs] || '').split(/,|;|\n/).map(s => s.trim()).filter(Boolean).map(t => ({ t, done: false }));
+      S.agenda.push({ id: uid(), day, time, what, who: r[map.who] || '', needs, status: 'Upcoming', notes: '' });
+      c.agenda = (c.agenda || 0) + 1;
+    } else if (mode === 'logi') addLogi(r[map.group] || title || sheet, r[map.text], r[map.who], r[map.ready], c, r[map.qty], r[map.side]);
+    else if (mode === 'budget' && r[map.item] && S.budget.some(b => b.item === r[map.item] && b.category === (r[map.category] || title))) c.same = (c.same || 0) + 1;
+    else if (mode === 'budget' && r[map.item]) {
+      S.budget.push({ id: uid(), item: r[map.item], category: r[map.category] || title, est: num(raw[map.est]), actual: num(raw[map.actual]), paidOut: YES.test(r[map.paidOut] || ''), notes: r[map.notes] || '' });
+      c.budget = (c.budget || 0) + 1;
+    }
+  }
+}
+
+function colMap(low, f) {
+  const cols = {}, used = new Set();
+  low.forEach((h, k) => { const hit = h && f.find(([n, re]) => !used.has(n) && re.test(h)); if (hit) { cols[k] = hit[0]; used.add(hit[0]); } });
+  return cols;
+}
+function genericRow(m, raw, r, title, src, c) {
+  const rec = {}, rest = [];
+  r.forEach((v, k) => {
+    if (!v) return;
+    const f = m.cols[k];
+    if (!f) { if (m.rest && m.hdr[k] && !/mail|phone|mobile/i.test(m.hdr[k])) rest.push([m.hdr[k], v]); return; }
+    rec[f] = m.bools?.includes(f) ? YES.test(v) : m.nums?.includes(f) ? num(raw[k]) : /^(due|date|when|time)$/.test(f) ? dateText(raw[k]) : v;
+  });
+  if (m.rest && rest.length) rec[m.rest] = rest.length === 1 ? rest[0][1] : rest.map(([h, v]) => `${h}: ${v}`).join('\n');
+  const keys = Object.keys(rec).filter(k => !m.bools?.includes(k) && k !== 'status');
+  if (!keys.length) return;
+  if (m.coll === 'feedback') rec.source ||= src; // where the feedback came from
+  if (m.f.some(([n]) => n === 'day') && !rec.day && title) rec.day = title;
+  if (S[m.coll].some(x => keys.every(k => String(x[k] ?? '') === String(rec[k] ?? '')))) { c.same = (c.same || 0) + 1; return; } // already imported
+  S[m.coll].push({ id: uid(), ...m.def, ...rec });
+  c[m.coll] = (c[m.coll] || 0) + 1;
+}
+// Any date a sheet may hold (Excel serial, "18 Nov 2026", "2026-11-18") -> YYYY-MM-DD for the calendar picker
+function isoDate(v) {
+  if (typeof v === 'number') return dateText(Math.floor(v)).slice(0, 10);
+  const s = String(v ?? '').trim(); if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const d = new Date(s);
+  return isNaN(d) ? s : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function setInfo(label, raw, c) {
+  const value = String(raw ?? '').trim();
+  if (!label || !value) return;
+  if (/^event name$/i.test(label)) { S.event = value; c.info = (c.info || 0) + 1; return; }
+  const f = INFO.find(([k, l]) => norm(l) === norm(label) || norm(k) === norm(label) || (k === 'start' && /^(start|from)/i.test(label)) || (k === 'end' && /^(end|to)\b/i.test(label)));
+  S.info[f ? f[0] : label] = f?.[2] === 'date' ? isoDate(raw) : value;
+  c.info = (c.info || 0) + 1;
+}
+
+// One header row can hold several side-by-side tables (Teams: Blue | Red | Green; Rooms: Hill Top | Jungle Log ...)
+function peopleBlocks(low, above) {
+  const starts = [];
+  low.forEach((h, k) => { if (h === 'name') starts.push(k > 0 && /^(#|s\.?l|serial|s\.?no|no)/.test(low[k - 1]) ? k - 1 : k); });
+  const titled = above.filter(Boolean).length <= starts.length; // row above is a block-title row, not data
+  return starts.map((s, j) => {
+    const end = starts[j + 1] ?? low.length, cols = {};
+    for (let k = s; k < end; k++) {
+      if (low[k] === 'name') { cols.name = k; continue; }
+      const hit = PF.find(([, re]) => re.test(low[k]));
+      if (hit) cols[hit[0]] = k; // later column wins ("Room" then "Room Nos" -> Room Nos)
+    }
+    const title = titled ? above.slice(s, end).find(Boolean) || '' : '';
+    return { cols, title };
+  });
+}
+function personRow(raw, r, { cols, title }, sheet, c) {
+  const name = r[cols.name];
+  if (!name || name.startsWith('#') || name.toLowerCase() === 'name' || /\(example\)/i.test(name)) return;
+  const rec = { name };
+  for (const [f, k] of Object.entries(cols)) {
+    if (f === 'name' || !r[k] || r[k] === 'None') continue;
+    if (PBOOL.has(f)) rec[f] = YES.test(r[k]);
+    else if (f === 'paid' || f === 'fee' || f === 'pending') { const n = num(raw[k]); if (n != null) rec[f] = n; }
+    else if (f === 'phone') rec.phone = typeof raw[k] === 'number' ? String(Math.round(raw[k])) : r[k];
+    else if (f === 'size') rec.size = r[k].toUpperCase();
+    else rec[f] = r[k];
+  }
+  if ('paid' in cols && !('list' in cols)) rec.list = sheet; // payment ledger: tab name = ticket / payment status
+  if ('paid' in cols && !('paymentDone' in cols)) rec.paymentDone = rec.paid > 0 && !/yet|pending|due|partial/i.test(sheet);
+  if (rec.fee != null) { if (rec.pending == null) rec.pending = Math.max(0, rec.fee - (rec.paid || 0)); delete rec.fee; }
+  if (title) rec['team' in cols ? 'teamColor' : 'block'] = title;
+  upsert(rec, c);
+}
+function upsert(rec, c) {
+  const key = ph(rec.phone);
+  // Match by phone. Rows without a phone only merge with other phone-less rows of the same name, so a crew member
+  // and a participant who share a first name stay separate. The People tab offers a manual merge for the rest.
+  let p = (key && S.people.find(x => ph(x.phone) === key)) || S.people.find(x => !ph(x.phone) && nkey(x.name) === nkey(rec.name));
+  if (!p) { p = { id: uid(), name: rec.name, role: 'Participant' }; S.people.push(p); c.people = (c.people || 0) + 1; } else c.updated = (c.updated || 0) + 1;
+  for (const [k, v] of Object.entries(rec)) {
+    if (k === 'name') continue;
+    if (k === 'notes') { if (!(p.notes || '').includes(v)) p.notes = [p.notes, v].filter(Boolean).join('\n'); }
+    else p[k] = v;
+  }
+}
+function addLogi(group, text, who, ready, c, qty, side) {
+  if (!text) return;
+  if (S.logistics.some(x => x.group === group && x.text === text)) { c.same = (c.same || 0) + 1; return; }
+  side = side ? (/^p/i.test(side) ? 'Participant' : 'Organiser') : sideOf(group, who);
+  S.logistics.push({ id: uid(), side, group, text, who: who || '', qty: qty || '', ready: ready || '', done: false });
+  c.logistics = (c.logistics || 0) + 1;
+}
+async function importDocx(buf, c) {
+  const { value } = await mammoth.convertToHtml({ arrayBuffer: buf });
+  const doc = new DOMParser().parseFromString(value, 'text/html');
+  let group = 'General';
+  const walk = (list, parent) => {
+    for (const li of list.children) {
+      const sub = li.querySelector(':scope>ul,:scope>ol');
+      const txt = [...li.childNodes].filter(n => !/^(UL|OL)$/.test(n.nodeName)).map(n => n.textContent).join('').trim();
+      if (sub) walk(sub, txt); else addLogi(parent ? `${group} › ${parent}` : group, txt, '', '', c);
+    }
+  };
+  for (const el of doc.body.children) {
+    const t = el.textContent.trim();
+    if (/^(UL|OL)$/.test(el.tagName)) walk(el, '');
+    else if (el.tagName === 'TABLE') importRows([...el.rows].map(tr => [...tr.cells].map(td => td.textContent.trim())), 'Word table', c);
+    else if (!t) continue;
+    else if (/^H\d/.test(el.tagName) || el.querySelector('strong') || t.endsWith(':')) group = t.replace(/:$/, '');
+    else addLogi(group, t, '', '', c);
+  }
+}
+
+// ================= templates =================
+// Download these, fill them (Excel or Google Sheets), import them back. Rows marked "(example)" are skipped on import.
+const TEMPLATES = [
+  { phase: 'Pre-event', file: '1-Pre-event-template.xlsx', about: 'Event details, participant list with payment + agreement status, logistics checklist (For = Organiser or Participant), budget.', sheets: [
+    ['Event info', [['Field', 'Value', 'Hint'], ['Event name', '', 'e.g. Leadership Retreat 2027'], ...INFO.map(([, l]) => [l, '', {
+      venue: 'Resort / hotel name', location: 'City, state', start: 'First day, e.g. 2027-01-10', end: 'Last day, e.g. 2027-01-14', food: 'e.g. Buffet · Veg & Non-veg', checkin: 'e.g. 2:00 PM', checkout: 'e.g. 10:30 AM',
+      hospital: 'Name, distance, phone', venueContact: 'Name + phone of venue manager', lead: 'Who is in charge on site', notes: 'Anything else' }[INFO.find(([, x]) => x === l)[0]]])]],
+    ['Participants', [['Name', 'Phone', 'Email', 'Role', 'Ticket / List', 'Amount collected', 'Pending amount', 'Contact info collected', 'Payment completed', 'Agreement sent', 'Agreement signed',
+      'Added to WhatsApp group', 'Gender', 'T-shirt size', 'Team', 'Room', 'Room type / Block', 'Food preference', 'Medical notes / allergies', 'Emergency contact', 'Goal / About', 'Notes'],
+      ['Priya Raman (example)', '919800000001', 'priya@example.com', 'Participant', 'Full ticket', 50000, 0, 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Female', 'M', 'Team 1', '101', 'Hill Top', 'Veg', 'Peanut allergy', 'Raman K 919800000009', 'Runs a bakery chain', ''],
+      ['Arun Kumar (example)', '919800000002', '', 'Participant', 'Early bird', 20000, 30000, 'Yes', 'No', 'Yes', 'No', 'Yes', 'Male', 'XL', 'Team 2', '102', 'Hill Top', 'Non-veg', '', '', '', 'Balance by 5 Dec']]],
+    ['Logistics', [['For', 'Group', 'Task', 'Who', 'Qty', 'Ready when'], ['Organiser', 'Conference hall', 'Mic + receiver set (example)', 'AV team', 2, 'Tested a day before'],
+      ['Organiser', 'Rooms', 'Welcome letter in every room (example)', 'Hospitality', 40, 'Placed before check-in'], ['Organiser', 'Kit bag', 'Notebook + pen (example)', 'Ops', 40, 'Packed in kit bags'],
+      ['Participant', 'Things to carry', 'Comfortable trekking shoes (example)', '', '', 'Shared in WhatsApp group']]],
+    ['Budget', [['Item', 'Category', 'Estimated', 'Actual', 'Paid out', 'Notes'], ['Venue + stay (example)', 'Venue', 800000, '', 'No', '50% advance paid'], ['Standees + cards (example)', 'Print', 15000, 12500, 'Yes', '']]],
+  ] },
+  { phase: 'During event', file: '2-During-event-template.xlsx', about: 'Session-wise agenda with requirements, meal timings + menu, medical / incident log.', sheets: [
+    ['Agenda', [['Day', 'Time', 'What happens', 'Who', 'Things needed'], ['Day 1 (example)', '9:00 to 9:30 AM', 'Welcome and house rules', 'Host', 'Mic, music, slides'],
+      ['Day 1 (example)', '9:30 to 11:00 AM', 'Vision board workshop', 'Facilitator', 'Charts, magazines, scissors, glue'], ['Day 1 (example)', '1:00 to 2:00 PM', 'Lunch', '', '']]],
+    ['Meals', [['Day', 'Meal', 'Time', 'Service', 'Veg', 'Non-veg', 'Menu', 'Venue', 'Headcount', 'Served'], ['Day 1 (example)', 'Breakfast', '8:00 to 9:00 AM', 'Buffet', 'Yes', 'Yes', 'Idli, dosa, eggs', 'Main restaurant', 45, ''],
+      ['Day 1 (example)', 'Lunch', '1:00 to 2:00 PM', 'Buffet', 'Yes', 'Yes', '', 'Poolside', 45, '']]],
+    ['Incidents', [['Person', 'Incident time', 'What happened', 'Action taken', 'Status', 'Notes'], ['Arun Kumar (example)', 'Day 2, 4:15 PM', 'Twisted ankle on trek', 'First aid, ice pack, rested', 'Resolved', '']]],
+  ] },
+  { phase: 'Post-event', file: '3-Post-event-template.xlsx', about: 'Follow-ups (who, why, owner), queries + feedback (e.g. Google Form export), post-production checklist.', sheets: [
+    ['Follow-ups', [['Person', 'Phone', 'Reason', 'Owner', 'Due date', 'Status', 'Notes'], ['Priya Raman (example)', '919800000001', 'Wants the slide deck', 'Ops', '2027-01-20', 'Open', ''],
+      ['Arun Kumar (example)', '919800000002', 'Balance payment 30,000', 'Accounts', '2027-01-25', 'Open', 'Promised by 25th']]],
+    ['Feedback', [['Name', 'Source', 'Type', 'Rating', 'Feedback', 'Date'], ['Priya Raman (example)', 'Google Form', 'Feedback', 5, 'Loved the vision board session', '2027-01-18'],
+      ['Arun Kumar (example)', 'WhatsApp', 'Query', '', 'When will photos be shared?', '2027-01-19']]],
+    ['Post checklist', [['Post-event task', 'Owner', 'Due date', 'Done'], ['Send thank-you message (example)', 'Host', '', 'No']]],
+  ] },
+  { phase: 'Media & assets', file: '4-Media-and-assets-template.xlsx', about: 'Photo + video pipeline to Drive, testimonials, equipment / asset register.', sheets: [
+    ['Photos', [['Batch', 'Owner', 'Collected', 'Scaled', 'Uploaded to Drive', 'Drive link'], ['Day 1 (example)', 'Photographer', 'Yes', 'No', 'No', '']]],
+    ['Videos', [['Video', 'Editor', 'Footage collected', 'Edited', 'Uploaded to Drive', 'Drive link'], ['Day 1 highlights (example)', 'Editor', 'Yes', 'No', 'No', '']]],
+    ['Testimonials', [['Person', 'Day', 'Recorded', 'Edited', 'Uploaded to Drive', 'Drive link'], ['Priya Raman (example)', 'Day 2', 'Yes', 'No', 'No', '']]],
+    ['Assets', [['Asset', 'Category', 'Qty', 'Owner', 'Taken out', 'Returned', 'Condition', 'Notes'], ['Camera + 2 lenses (example)', 'Media', 1, 'Photographer', 'Yes', 'No', 'Good', '']]],
+  ] },
+];
+const HOWTO = ['HOW TO USE THESE TEMPLATES', '',
+  '1. Keep the header row of each tab as it is. You can reorder columns or delete the ones you do not need.',
+  '2. Rows marked (example) are skipped when you import. Delete them or leave them.',
+  '3. Yes / No columns: type Yes, or leave blank for No.',
+  '4. Amounts: plain numbers (50000), no currency sign needed.',
+  '5. Google Sheets: File > Import > Upload this file. When filled, File > Download > Microsoft Excel (.xlsx).',
+  '6. In the app: open the event, click Import, pick one or many files. Re-importing the same rows does not create duplicates.',
+  '7. Your own sheets work too, as long as the column names are similar (Name, Phone, Task, Who, Time, What happens...).'];
+</script>
+
+<script>
+// ================= UI =================
+let ui = { logiSide: 'Organiser', phase: 'pre', sub: { pre: 'onboard', during: 'sessions', post: 'payments', media: 'photos' }, day: null, q: '', open: new Set(), pendingOnly: false };
+const money = n => '₹' + Math.round(n || 0).toLocaleString('en-IN');
+const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
+const bar = (a, b, label) => `<div class="prog"><div class="prog-l">${esc(label)} · <b>${a}/${b}</b> (${pct(a, b)}%)</div><div class="track"><i style="width:${pct(a, b)}%"></i></div></div>`;
+const stat = (label, v, warn) => `<div class="stat ${warn ? 'warn' : ''}"><b>${v}</b><span>${esc(label)}</span></div>`;
+const groupBy = (a, f) => a.reduce((m, x) => ((m[f(x)] ??= []).push(x), m), {});
+const opts = (list, cur) => list.map(o => `<option ${cur === o ? 'selected' : ''}>${o}</option>`).join('');
+const days = () => [...new Set(S.agenda.map(s => s.day || 'Agenda'))];
+// Event display mode (default on every load): screen may be projected, so everyone shows as paid and no amounts appear.
+// Real payment data stays saved; "Show payments" reveals it after a confirm.
+const pub = () => !ui.reveal;
+const PAYF = new Set(['list', 'paid', 'pending', 'paymentDone', 'payStatus']);
+const mask = p => pub() ? { ...p, paymentDone: true, paid: null, pending: null, list: '', payStatus: '' } : p;
+const noPay = cols => pub() ? cols.filter(c => !PAYF.has(c.f)) : cols;
+const payRe = /refund|payment|balance|₹|\brs\.? ?\d|\bpaid\b|\bfee\b|cheque|pdc/i;
+const visibleFollowups = () => pub() ? S.followups.filter(f => !payRe.test(`${f.reason} ${f.notes}`)) : S.followups;
+const parts = () => S.people.filter(p => (p.role || 'Participant') === 'Participant').map(mask);
+const pendingOf = a => a.reduce((t, p) => t + (p.pending || 0), 0);
+const dueList = () => S.people.filter(p => p.pending > 0 || p.payStatus || /yet|pending|due|partial/i.test(p.list || ''));
+const peopleList = () => `<datalist id="ppl">${S.people.map(p => `<option value="${esc(p.name)}">`).join('')}</datalist>`;
+const inp = (style = 'padding:7px;width:300px;border:1px solid var(--line);border-radius:8px') => style;
+
+function table(coll, rows, cols, o = {}) {
+  const cell = (r, c) => {
+    const a = `data-coll="${coll}" data-id="${r.id}" data-f="${c.f}"`;
+    if (c.type === 'ro') return esc(c.get ? c.get(r) : r[c.f]);
+    if (c.type === 'check') return `<input type="checkbox" ${a} ${r[c.f] ? 'checked' : ''} aria-label="${esc(c.label)}">`;
+    if (c.type === 'select') return `<select ${a}>${opts(c.opts, r[c.f])}</select>`;
+    if (c.type === 'area') return `<textarea ${a} rows="1" style="min-width:${c.w || '200px'}">${esc(r[c.f])}</textarea>`;
+    const link = c.link && /^https?:\/\//.test(r[c.f] || '') ? ` <a href="${esc(r[c.f])}" target="_blank" rel="noopener">open ↗</a>` : '';
+    return `<input type="${c.type || 'text'}" ${a} value="${esc(r[c.f])}" style="min-width:${c.w || '110px'}" ${c.list ? 'list="ppl"' : ''}>${link}`;
+  };
+  const body = rows.map(r => `<tr>${cols.map(c => `<td>${cell(r, c)}</td>`).join('')}${o.noDel ? '' : `<td><button class="x" data-del="${coll}" data-id="${r.id}" title="Delete row">×</button></td>`}</tr>`).join('')
+    || `<tr><td colspan="${cols.length + 1}" class="empty">${o.empty || 'Nothing yet. Add a row or import a file.'}</td></tr>`;
+  return `<div class="tw"><table><thead><tr>${cols.map(c => `<th>${c.label}</th>`).join('')}${o.noDel ? '' : '<th></th>'}</tr></thead><tbody>${body}</tbody></table></div>
+    ${saveBar(o.noAdd ? '' : `<button class="add" data-add="${coll}" data-set="${esc(JSON.stringify(o.set || {}))}">+ ${o.addLabel || 'Add'}</button>`)}`;
+}
+// Changes save on their own; the Save button + status line just make that visible (and commit half-typed "add" boxes).
+const savedLabel = () => '✓ All changes saved' + (lastSaved ? ' · ' + lastSaved.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '');
+const saveBar = (left = '') => `<div class="savebar">${left}<span class="saved">${savedLabel()}</span><button class="primary" data-act="save">💾 Save</button></div>`;
+function markSaved() { if (typeof document !== 'undefined') document.querySelectorAll('.saved').forEach(e => { e.textContent = savedLabel(); e.classList.remove('dirty'); }); }
+const subnav = (phase, items) => (items[ui.sub[phase]] || (ui.sub[phase] = Object.keys(items)[0]), '') + `<nav class="sub">${Object.entries(items).map(([k, l]) => `<button class="${ui.sub[phase] === k ? 'on' : ''}" data-sub="${phase}:${k}">${l}</button>`).join('')}</nav>`;
+const PHASES = [['pre', 'Pre-event'], ['during', 'During'], ['post', 'Post-event'], ['media', 'Media & assets'], ['templates', '⬇ Templates']];
+
+function render() {
+  document.getElementById('evsel').innerHTML = index.events.map(e => `<option value="${e.id}" ${e.id === index.current ? 'selected' : ''}>${esc(e.name)}</option>`).join('');
+  const logo = document.getElementById('logo'); logo.hidden = !S.logo; logo.src = S.logo || '';
+  document.getElementById('wm').style.backgroundImage = S.logo ? `url("${S.logo}")` : 'none';
+  document.title = S.event + ' · Event Manager';
+  const rv = document.getElementById('reveal'); rv.textContent = pub() ? '🔒 Display mode' : '🔓 Payments visible'; rv.classList.toggle('warn', !pub());
+  document.getElementById('phases').innerHTML = PHASES.map(([k, l]) => `<button class="ph ${ui.phase === k ? 'on' : ''} ${k === 'templates' ? 'tpl' : ''}" data-phase="${k}" ${ui.phase === k ? 'aria-current="page"' : ''}>${l}</button>`).join('');
+  document.getElementById('app').innerHTML = { pre: viewPre, during: viewDuring, post: viewPost, media: viewMedia, templates: viewTemplates }[ui.phase]();
+}
+
+// ---------------- PRE ----------------
+function viewPre() {
+  const P = parts(), L = S.logistics, n = P.length;
+  return `<div class="stats">${stat('Participants', n)}${stat('Contact info collected', cnt(P, 'formFilled') + ' / ' + n)}${stat('Payment completed', cnt(P, 'paymentDone') + ' / ' + n)}
+      ${stat('Agreements signed', cnt(P, 'agreementFilled') + ' / ' + n)}${pub() ? '' : stat('Collected', money(sum(S.people, 'paid'))) + stat('Pending', money(pendingOf(S.people)), pendingOf(S.people) > 0)}
+      ${stat('Organiser checklist', cnt(L.filter(x => x.side === 'Organiser'), 'done') + ' / ' + L.filter(x => x.side === 'Organiser').length)}</div>`
+    + setupCard()
+    + subnav('pre', { info: 'Event info', onboard: 'Participant checklist', people: 'People & invitations', logistics: 'Logistics checklist', ...(pub() ? {} : { budget: 'Budget' }), rooms: 'Rooms, teams & T-shirts' })
+    + { info: preInfo, onboard: preOnboard, people: prePeople, logistics: preLogi, budget: preBudget, rooms: preRooms }[ui.sub.pre]();
+}
+const setupCard = () => S.people.length || S.agenda.length ? '' : `<div class="card setup"><h2>Set up ${esc(S.event)}</h2>
+  <p>1. Add the event logo. &nbsp; 2. Download the templates (⬇ Templates tab), fill them, then import them. Your own sheets and Word docs work too.</p>
+  <label class="btn" for="logofile">Upload logo</label> <button class="primary" data-phase="templates">Get templates</button> <label class="btn primary" for="file">Import files</label></div>`;
+const fmtDay = iso => new Date(iso + 'T00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+function dateRange() {
+  const { start, end } = S.info; if (!start) return '';
+  if (!end || end === start) return fmtDay(start) + ' · 1 day';
+  return `${fmtDay(start)} → ${fmtDay(end)} · ${Math.round((new Date(end) - new Date(start)) / 864e5) + 1} days`;
+}
+function preInfo() {
+  const extra = Object.keys(S.info).filter(k => !INFO.some(([x]) => x === k));
+  return `<div class="card"><div class="row" style="gap:14px">${S.logo ? `<img src="${S.logo}" alt="Event logo" style="height:70px;border-radius:8px">` : ''}
+      <div style="flex:1"><label class="muted">Event name</label><input data-evname value="${esc(S.event)}" style="display:block;width:100%;font-size:20px;font-weight:700;padding:6px;border:1px solid var(--line);border-radius:8px"></div>
+      <label class="btn" for="logofile">${S.logo ? 'Change logo' : 'Upload logo'}</label>${S.logo ? '<button data-act="rmlogo">Remove logo</button>' : ''}</div></div>
+    <div class="card"><h3>Event details</h3>${S.info.start ? `<p><b>${esc(dateRange())}</b></p>` : ''}<div class="form">${INFO.map(([k, l, t]) => `<label>${l}<input type="${t || 'text'}" data-info="${k}" value="${esc(S.info[k])}"
+        ${k === 'end' && S.info.start ? `min="${esc(S.info.start)}"` : ''}${k === 'start' && S.info.end ? `max="${esc(S.info.end)}"` : ''}></label>`).join('')}
+      ${extra.map(k => `<label>${esc(k)}<input data-info="${esc(k)}" value="${esc(S.info[k])}"></label>`).join('')}</div>${saveBar()}</div>`;
+}
+
+// Agreement process: one row per participant, ticks + amounts next to the name.
+const STEPS = [['formFilled', 'Contact info collected'], ['paymentDone', 'Payment completed'], ['agreementFilled', 'Agreement signed']];
+function preOnboard() {
+  const P = parts(), ok = p => STEPS.every(([f]) => p[f]), rows = ui.pendingOnly ? P.filter(p => !ok(p)) : P;
+  return `<div class="card"><div class="stats">${stat('Fully onboarded', P.filter(ok).length + ' / ' + P.length)}
+      ${pub() ? '' : stat('Amount collected', money(sum(P, 'paid'))) + stat('Amount pending', money(pendingOf(P)), pendingOf(P) > 0)}</div>
+    ${bar(P.filter(ok).length, P.length, 'Participants with all 3 done')}
+    <button data-act="pendingonly">${ui.pendingOnly ? 'Show everyone' : 'Show only pending'}</button> <span class="muted">${rows.length} shown${pub() ? '' : ' · ticking "Payment completed" moves any pending amount into collected'}</span>
+    <div class="tw"><table class="onb"><thead><tr><th>#</th><th>Participant</th><th>Phone</th>${STEPS.map(([, l]) => `<th class="c">${l}</th>`).join('')}${pub() ? '' : '<th>Collected ₹</th><th>Pending ₹</th>'}<th>Status</th></tr></thead><tbody>
+    ${rows.map((p, i) => `<tr class="${ok(p) ? 'ready' : ''}"><td>${i + 1}</td><td><b>${esc(p.name)}</b><div class="muted">${esc(p.list || '')}</div></td><td>${esc(p.phone || '')}</td>
+      ${STEPS.map(([f, l]) => `<td class="c">${pub() && f === 'paymentDone' ? `<span class="tickbox" role="img" aria-label="${l}">✓</span>`
+        : `<input type="checkbox" data-coll="people" data-id="${p.id}" data-f="${f}" ${p[f] ? 'checked' : ''} aria-label="${l}: ${esc(p.name)}">`}</td>`).join('')}
+      ${pub() ? '' : `<td><input type="number" data-coll="people" data-id="${p.id}" data-f="paid" value="${esc(p.paid)}" aria-label="Collected: ${esc(p.name)}"></td>
+      <td><input type="number" data-coll="people" data-id="${p.id}" data-f="pending" value="${esc(p.pending)}" aria-label="Pending: ${esc(p.name)}"></td>`}
+      <td>${ok(p) ? '<span class="pill ok">✓ Ready</span>' : `<span class="pill no">Missing: ${STEPS.filter(([f]) => !p[f]).map(([, l]) => l.split(' ')[0].toLowerCase()).join(', ')}</span>`}</td></tr>`).join('')
+      || `<tr><td colspan="9" class="empty">${P.length ? 'Everyone is fully onboarded. 🎉' : 'No participants yet. Import the participant sheet or add people.'}</td></tr>`}
+    </tbody></table></div>${saveBar()}</div>`;
+}
+function prePeople() {
+  const q = norm(ui.q), rows = S.people.map(mask).filter(p => !q || norm([p.name, p.phone, p.role, p.team, p.room, p.block, p.goal].join(' ')).includes(q));
+  return `<div class="card"><input id="q" placeholder="Search name, phone, team, room…" value="${esc(ui.q)}" style="${inp()}">
+    <span class="muted">${rows.length} of ${S.people.length}</span>${dupCard()}
+    ${table('people', rows, noPay([
+      { f: 'name', label: 'Name', w: '180px' }, { f: 'phone', label: 'Phone', w: '120px' }, { f: 'role', label: 'Role', type: 'select', opts: ['Participant', 'Crew', 'Speaker', 'Guest'] },
+      { f: 'list', label: 'Ticket / list', w: '90px' }, { f: 'paid', label: 'Collected ₹', type: 'number', w: '90px' }, { f: 'pending', label: 'Pending ₹', type: 'number', w: '90px' },
+      { f: 'formSent', label: 'Form sent', type: 'check' }, { f: 'formFilled', label: 'Contact info', type: 'check' }, { f: 'paymentDone', label: 'Paid in full', type: 'check' },
+      { f: 'agreementSent', label: 'Agmt sent', type: 'check' }, { f: 'agreementFilled', label: 'Agmt signed', type: 'check' }, { f: 'whatsapp', label: 'WA group', type: 'check' },
+      { f: 'team', label: 'Team', w: '70px' }, { f: 'size', label: 'T-shirt', w: '50px' }, { f: 'room', label: 'Room', w: '55px' },
+      { f: 'food', label: 'Food', type: 'select', opts: ['', 'Veg', 'Non-veg', 'Jain', 'Vegan', 'Other'] }, { f: 'medical', label: 'Medical / allergies', w: '150px' },
+      { f: 'emergency', label: 'Emergency contact', w: '150px' }, { f: 'goal', label: 'Goal / about', type: 'area' }]), { addLabel: 'Add person', set: { role: 'Participant' } })}</div>`;
+}
+// Phone-less rows whose name looks like someone else's (e.g. "Ravi" vs "Ravikumar S (Ravi)"). User decides.
+const toks = s => norm(s).split(/[^a-z]+/).filter(t => t.length > 2);
+function dupCard() {
+  const d = [];
+  for (const a of S.people) {
+    if (ph(a.phone) || !toks(a.name).length) continue;
+    for (const b of S.people) if (b !== a && !(a.notDup || []).includes(b.id) && toks(b.name).some(x => x.startsWith(toks(a.name)[0]))) d.push([a, b]);
+  }
+  const desc = p => esc([p.phone, mask(p).list, p.team, p.room && 'room ' + p.room].filter(Boolean).join(' · ') || 'no details');
+  return d.length ? `<details style="margin:8px 0"><summary><b>${d.length} possible duplicates</b> <span class="muted">(same person under two names? merge them)</span></summary>
+    ${d.map(([a, b]) => `<div style="padding:4px 0"><b>${esc(a.name)}</b> <span class="muted">${desc(a)}</span> ↔ <b>${esc(b.name)}</b> <span class="muted">${desc(b)}</span>
+      <button data-merge="${a.id}:${b.id}">Merge into ${esc(b.name)}</button> <button data-notdup="${a.id}:${b.id}">Different people</button></div>`).join('')}</details>` : '';
+}
+const SIDES = { Organiser: ['🧑‍💼 Organiser checklist', 'What the team sets up, carries and checks'], Participant: ['🎒 Participant checklist', 'What participants bring and what we tell them'] };
+function preLogi() {
+  const side = ui.logiSide, other = side === 'Organiser' ? 'Participant' : 'Organiser';
+  const L = S.logistics.filter(x => x.side === side), groups = Object.entries(groupBy(L, x => x.group || 'General'));
+  return `<nav class="sub">${Object.entries(SIDES).map(([k, [l]]) => { const a = S.logistics.filter(x => x.side === k);
+      return `<button class="${k === side ? 'on' : ''}" data-side="${k}">${l} · ${cnt(a, 'done')}/${a.length}</button>`; }).join('')}</nav>
+    <p class="muted">${SIDES[side][1]}</p>${bar(cnt(L, 'done'), L.length, side + ' checklist ready')}`
+    + groups.map(([g, rows]) => `<div class="card"><h3>${esc(g)} <span class="muted">${cnt(rows, 'done')}/${rows.length} ready</span>
+        <button style="float:right;font-size:12px" data-move="${esc(g)}" title="Move this group to the ${other} checklist">Move to ${other} →</button></h3>
+      ${table('logistics', rows, [{ f: 'done', label: '✓', type: 'check' }, { f: 'text', label: 'Item / task', w: '260px' }, { f: 'who', label: 'Owner' }, { f: 'qty', label: 'Qty', w: '50px' }, { f: 'ready', label: 'Ready when / notes', w: '240px' }], { set: { group: g, side } })}</div>`).join('')
+    + `<div class="card"><input id="newgroup" placeholder="New ${side.toLowerCase()} group, e.g. ${side === 'Organiser' ? 'Stage & AV' : 'Documents to bring'}" style="${inp()}"> <button data-act="newgroup">Add group</button></div>`;
+}
+function preBudget() {
+  const P = S.people, B = S.budget, got = sum(P, 'paid'), pend = pendingOf(P), est = sum(B, 'est'), act = sum(B, 'actual');
+  return `<div class="stats">${stat('Expected income', money(got + pend))}${stat('Collected', money(got))}${stat('Still to collect', money(pend), pend > 0)}
+    ${stat('Budgeted expenses', money(est))}${stat('Spent so far', money(act))}${stat('Net (collected − spent)', money(got - act))}</div>
+    <div class="card"><h3>Expenses</h3>${table('budget', B, [{ f: 'item', label: 'Item', w: '220px' }, { f: 'category', label: 'Category' },
+      { f: 'est', label: 'Estimated ₹', type: 'number', w: '100px' }, { f: 'actual', label: 'Actual ₹', type: 'number', w: '100px' }, { f: 'paidOut', label: 'Paid out', type: 'check' }, { f: 'notes', label: 'Notes', w: '220px' }])}</div>`;
+}
+function preRooms() {
+  const P = S.people, li = a => `<ul>${a.map(p => `<li>${esc(p.name)}</li>`).join('')}</ul>`, STD = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+  const rooms = Object.entries(groupBy(P.filter(p => p.room), p => (p.block ? p.block + ' · ' : '') + 'Room ' + p.room)).sort();
+  const teams = Object.entries(groupBy(P.filter(p => p.team), p => p.team + (p.teamColor ? ` (${p.teamColor})` : ''))).sort();
+  const sizes = groupBy(P.filter(p => p.size), p => p.size);
+  return `<div class="card"><h3>T-shirt sizes <span class="muted">${P.filter(p => p.size).length} people with a size</span></h3>
+      <div class="stats">${STD.concat(Object.keys(sizes).filter(s => !STD.includes(s))).map(s => stat(s, (sizes[s] || []).length)).join('')}</div></div>
+    <div class="card"><h3>Teams</h3><div class="groups">${teams.map(([t, a]) => `<div class="card"><h3>${esc(t)} <span class="muted">${a.length}</span></h3>${li(a)}</div>`).join('') || '<p class="muted">Import the teams sheet or type teams in People.</p>'}</div></div>
+    <div class="card"><h3>Rooms <span class="muted">${rooms.length} rooms · ${P.filter(p => !p.room).length} people without a room</span></h3><div class="groups">${rooms.map(([r, a]) => `<div class="card"><h3>${esc(r)}</h3>${li(a)}</div>`).join('') || '<p class="muted">Import the room allocation sheet.</p>'}</div></div>`;
+}
+
+// ---------------- DURING ----------------
+const STD_CHECKS = ['Hall / venue ready', 'Photos taken', 'Video recorded'];
+function viewDuring() {
+  const A = S.agenda, needs = A.flatMap(s => s.needs || []), P = S.people, open = S.incidents.filter(x => x.status !== 'Resolved').length;
+  return `<div class="stats">${stat('Sessions done', A.filter(s => s.status === 'Done').length + ' / ' + A.length)}${stat('Requirements ready', needs.filter(n => n.done).length + ' / ' + needs.length)}
+      ${stat('Meals served', cnt(S.meals, 'served') + ' / ' + S.meals.length)}${stat('Checked in', cnt(P, 'checkedIn') + ' / ' + P.length)}${stat('Open medical incidents', open, open > 0)}</div>`
+    + subnav('during', { sessions: 'Sessions checklist', food: 'Food', stay: 'Accommodation', health: 'Medical & safety' })
+    + { sessions: duringSessions, food: duringFood, stay: duringStay, health: duringHealth }[ui.sub.during]();
+}
+function duringSessions() {
+  const ds = days(); if (!ds.includes(ui.day)) ui.day = ds[0];
+  const ss = S.agenda.filter(s => (s.day || 'Agenda') === ui.day), needs = ss.flatMap(s => s.needs || []);
+  return `<div class="grid2"><div>
+      <nav class="sub">${ds.map(d => `<button class="${d === ui.day ? 'on' : ''}" data-day="${esc(d)}">${esc(d)}</button>`).join('')}</nav>
+      ${ss.length ? bar(ss.filter(s => s.status === 'Done').length, ss.length, 'Sessions done today') + bar(needs.filter(n => n.done).length, needs.length, 'Requirements ready today') : ''}
+      ${ss.map((s, i) => sessionCard(s, i + 1)).join('') || '<div class="card empty">Import the agenda sheet (⬇ Templates › During event), or add a session.</div>'}
+      ${saveBar('<button class="add" data-act="addsession">+ Add session</button>')}
+    </div><aside>${quickLog()}</aside></div>`;
+}
+function sessionCard(s, n) {
+  const needs = s.needs || [], std = s.std || {}, ready = needs.filter(x => x.done).length, a = f => `data-coll="agenda" data-id="${s.id}" data-f="${f}"`;
+  return `<details class="card sess ${s.status === 'Live' ? 'live' : s.status === 'Done' ? 'done' : ''}" data-sid="${s.id}" ${ui.open.has(s.id) ? 'open' : ''}>
+    <summary><span class="num">${n}</span><span class="time">${esc(s.time)}</span><b class="what">${esc(s.what)}</b><span class="muted">${esc(s.who)}</span>
+      ${needs.length ? `<span class="pill ${ready === needs.length ? 'ok' : 'no'}">${ready}/${needs.length} ready</span>` : ''}<span class="pill ${s.status === 'Done' ? 'ok' : 'st'}">${s.status || 'Upcoming'}</span></summary>
+    <div class="body">
+      <div class="row"><input ${a('time')} value="${esc(s.time)}" placeholder="Time" style="width:160px"><input ${a('what')} value="${esc(s.what)}" style="flex:1"><input ${a('who')} value="${esc(s.who)}" placeholder="Who" style="width:150px">
+        <select ${a('status')}>${opts(['Upcoming', 'Live', 'Done'], s.status)}</select><button class="x" data-del="agenda" data-id="${s.id}" title="Delete session">×</button></div>
+      <h4>Requirements</h4><div class="checks">${needs.map((x, i) => `<label><input type="checkbox" data-need="${s.id}:${i}" ${x.done ? 'checked' : ''}> ${esc(x.t)}</label>`).join('')}
+        <input type="text" data-addneed="${s.id}" placeholder="+ add requirement, Enter"></div>
+      <h4>Every session</h4><div class="checks">${STD_CHECKS.map(t => `<label><input type="checkbox" data-std="${s.id}" data-t="${esc(t)}" ${std[t] ? 'checked' : ''}> ${t}</label>`).join('')}</div>
+      <textarea ${a('notes')} rows="2" placeholder="Session notes…">${esc(s.notes)}</textarea>
+      ${saveBar(s.status === 'Done' ? '' : `<button data-sdone="${s.id}">✓ Mark session done</button>`)}
+    </div></details>`;
+}
+function quickLog() {
+  return `<div class="card"><h3>Quick log</h3>${peopleList()}
+    <label>Someone asked for something</label><input id="rq-p" list="ppl" placeholder="Person"><input id="rq-t" placeholder="What they asked for"><button data-act="logreq">Add to follow-ups</button>
+    <label>Testimonial recorded</label><input id="ts-p" list="ppl" placeholder="Person"><button data-act="logtest">Log testimonial</button>
+    <label>Medical / safety incident</label><input id="md-p" list="ppl" placeholder="Person"><input id="md-t" placeholder="What happened"><button data-act="logmed">Log incident</button></div>`;
+}
+function duringFood() {
+  const pref = groupBy(S.people, p => p.food || 'Not set'), byDay = groupBy(S.meals, m => m.day || 'Meals');
+  const cols = [{ f: 'served', label: 'Served', type: 'check' }, { f: 'meal', label: 'Meal', w: '110px' }, { f: 'time', label: 'Time', w: '140px' }, { f: 'service', label: 'Service', w: '100px' },
+    { f: 'veg', label: 'Veg', type: 'check' }, { f: 'nonveg', label: 'Non-veg', type: 'check' }, { f: 'menu', label: 'Menu', type: 'area', w: '220px' }, { f: 'venue', label: 'Where', w: '120px' }, { f: 'count', label: 'Headcount', type: 'number', w: '70px' }];
+  return `<div class="card"><h3>Food service</h3><div class="summary"><span>${esc(S.info.food || 'Set the food service in Pre-event › Event info')}</span>
+      ${Object.entries(pref).map(([k, a]) => `<span>${esc(k)}: <b>${a.length}</b></span>`).join('')}<span>Allergies noted: <b>${S.people.filter(p => /allerg/i.test(p.medical || '')).length}</b></span></div></div>`
+    + Object.entries(byDay).map(([d, rows]) => `<div class="card"><h3>${esc(d)} <span class="muted">${cnt(rows, 'served')}/${rows.length} served</span></h3>${table('meals', rows, cols, { set: { day: d }, addLabel: 'Add meal' })}</div>`).join('')
+    + (S.meals.length ? '' : `<div class="card">${table('meals', [], cols, { set: { day: ui.day || 'Day 1' }, addLabel: 'Add meal', empty: 'Import the Meals template, or add meals.' })}</div>`)
+    + `<div class="card"><h3>Food preferences</h3>${table('people', S.people, [{ f: 'name', label: 'Name', type: 'ro' }, { f: 'food', label: 'Food', type: 'select', opts: ['', 'Veg', 'Non-veg', 'Jain', 'Vegan', 'Other'] }, { f: 'medical', label: 'Allergies / medical', w: '260px' }], { noAdd: 1, noDel: 1 })}</div>`;
+}
+function duringStay() {
+  const P = S.people;
+  return `<div class="card"><h3>Check-in / check-out</h3>${bar(cnt(P, 'checkedIn'), P.length, 'Checked in')}${bar(cnt(P, 'checkedOut'), P.length, 'Checked out')}
+    <p class="muted">${esc([S.info.venue, dateRange(), S.info.checkin && 'check-in ' + S.info.checkin, S.info.checkout && 'check-out ' + S.info.checkout].filter(Boolean).join(' · '))}</p>
+    ${table('people', [...P].sort((a, b) => String(a.room || '~').localeCompare(String(b.room || '~'), undefined, { numeric: true })), [{ f: 'name', label: 'Name', type: 'ro' }, { f: 'role', label: 'Role', type: 'ro' },
+      { f: 'block', label: 'Block', w: '110px' }, { f: 'room', label: 'Room', w: '60px' }, { f: 'checkedIn', label: 'Checked in', type: 'check' }, { f: 'checkedOut', label: 'Checked out', type: 'check' }, { f: 'stayNotes', label: 'Notes (key, bill, requests)', w: '240px' }], { noAdd: 1, noDel: 1 })}</div>`;
+}
+function duringHealth() {
+  const I = S.incidents, withInfo = S.people.filter(p => p.medical || p.emergency);
+  return `<div class="card alert"><h3>Emergency contacts</h3><div class="form">${INFO.filter(([k]) => ['hospital', 'venueContact', 'lead'].includes(k)).map(([k, l]) => `<label>${l}<input data-info="${k}" value="${esc(S.info[k])}"></label>`).join('')}</div></div>
+    <div class="card"><h3>Incident log <span class="muted">${I.filter(x => x.status !== 'Resolved').length} open</span></h3>${peopleList()}
+      ${table('incidents', I, [{ f: 'when', label: 'When', w: '140px' }, { f: 'person', label: 'Person', w: '150px', list: 1 }, { f: 'what', label: 'What happened', type: 'area' }, { f: 'action', label: 'Action taken', type: 'area' },
+        { f: 'status', label: 'Status', type: 'select', opts: ['Open', 'Under care', 'Resolved'] }, { f: 'notes', label: 'Notes', w: '160px' }], { addLabel: 'Log incident', set: { status: 'Open', when: new Date().toLocaleString('en-IN') } })}</div>
+    <div class="card"><h3>Medical info & emergency contacts per person <span class="muted">${withInfo.length} with info</span></h3>
+      ${table('people', [...withInfo, ...S.people.filter(p => !withInfo.includes(p))], [{ f: 'name', label: 'Name', type: 'ro' }, { f: 'phone', label: 'Phone', type: 'ro' },
+        { f: 'medical', label: 'Medical / allergies / medication', w: '260px' }, { f: 'emergency', label: 'Emergency contact (name + phone)', w: '220px' }], { noAdd: 1, noDel: 1 })}</div>`;
+}
+
+// ---------------- POST ----------------
+function viewPost() {
+  const due = dueList(), open = due.filter(p => !p.paymentDone), F = visibleFollowups();
+  return `<div class="stats">${pub() ? '' : stat('Collected', money(sum(S.people, 'paid'))) + stat('Pending', money(pendingOf(S.people)), pendingOf(S.people) > 0) + stat('Payments cleared', (due.length - open.length) + ' / ' + due.length)}
+      ${stat('Follow-ups open', F.filter(r => r.status !== 'Done').length, F.some(r => r.status !== 'Done'))}${stat('Feedback & queries', S.feedback.length)}
+      ${stat('Post checklist', cnt(S.checklist, 'done') + ' / ' + S.checklist.length)}</div>`
+    + subnav('post', { ...(pub() ? {} : { payments: 'Payments' }), followups: 'Follow-ups', feedback: 'Queries & feedback', checklist: 'Post-production checklist', wrapup: 'Logistics wrap-up' })
+    + { payments: postPayments, followups: postFollowups, feedback: postFeedback, checklist: postChecklist, wrapup: postWrapup }[ui.sub.post]();
+}
+function postPayments() {
+  const due = dueList().sort((a, b) => !!a.paymentDone - !!b.paymentDone);
+  return `<div class="card">${peopleList()}<input id="due-p" list="ppl" placeholder="Add someone to payment follow-up" style="${inp()}"> <button data-act="adddue">Add</button>
+      <span class="muted">Anyone with a pending amount appears here automatically.</span></div>`
+    + (due.map(p => {
+      const d = String(p.phone || '').replace(/\D/g, ''), a = f => `data-coll="people" data-id="${p.id}" data-f="${f}"`;
+      return `<div class="card pay ${p.paymentDone ? 'done' : ''}"><div class="sh"><b style="flex:1">${esc(p.name)} <span class="muted">${esc(p.list || '')}</span></b>
+        ${d ? `<a href="https://wa.me/${d}" target="_blank" rel="noopener">WhatsApp</a> · <a href="tel:+${d}">Call</a>` : ''}
+        <label>Collected ₹ <input type="number" ${a('paid')} value="${esc(p.paid)}"></label> <label>Pending ₹ <input type="number" ${a('pending')} value="${esc(p.pending)}"></label>
+        <select ${a('payStatus')}>${opts(['Pending', 'Promised', 'Cleared'], p.payStatus || (p.paymentDone ? 'Cleared' : 'Pending'))}</select>
+        <label><input type="checkbox" ${a('paymentDone')} ${p.paymentDone ? 'checked' : ''}> Completed</label></div>
+        <details><summary class="muted">${(p.followups || []).length} follow-ups logged · notes from sheet</summary>
+          ${(p.followups || []).map(f => `<div><span class="muted">${esc(f.d)}</span> ${esc(f.t)}</div>`).join('')}${p.notes ? `<pre>${esc(p.notes)}</pre>` : ''}</details>
+        <input class="log" data-followup="${p.id}" placeholder="Log a follow-up, e.g. 'Called, will pay balance by 7 Dec' then Enter"></div>`;
+    }).join('') || '<div class="card empty">No pending payments. 🎉</div>') + `<div class="card">${saveBar()}</div>`;
+}
+const postFollowups = () => `<div class="card"><h3>Follow-ups <span class="muted">who, why, who owns it, by when</span></h3>${peopleList()}
+  ${bar(visibleFollowups().filter(r => r.status === 'Done').length, visibleFollowups().length, 'Closed')}
+  ${table('followups', visibleFollowups(), [{ f: 'person', label: 'Who to follow up', w: '160px', list: 1 }, { f: 'phone', label: 'Phone', w: '110px' }, { f: 'reason', label: 'Reason', type: 'area', w: '240px' },
+    { f: 'owner', label: 'Owner' }, { f: 'due', label: 'Due', type: 'date' }, { f: 'status', label: 'Status', type: 'select', opts: ['Open', 'In progress', 'Done'] }, { f: 'notes', label: 'Notes / outcome', type: 'area' }],
+    { addLabel: 'Add follow-up', set: { status: 'Open' }, empty: 'Requests logged during the event land here. Or add one, or import the Follow-ups template.' })}</div>`;
+function postFeedback() {
+  const F = S.feedback, rated = F.filter(f => num(f.rating) != null), src = groupBy(F, f => f.source || 'Typed in'), typ = groupBy(F, f => f.type || 'Feedback');
+  return `<div class="card"><h3>Queries & feedback</h3>
+    <div class="summary"><span>Total <b>${F.length}</b></span>${rated.length ? `<span>Avg rating <b>${(sum(rated, 'rating') / rated.length).toFixed(1)}</b> (${rated.length})</span>` : ''}
+      ${Object.entries(typ).map(([k, a]) => `<span>${esc(k)} <b>${a.length}</b></span>`).join('')}<span>Open <b>${F.filter(f => f.status !== 'Closed').length}</b></span></div>
+    <p class="muted">Sources: ${Object.entries(src).map(([k, a]) => `${esc(k)} (${a.length})`).join(' · ') || 'none yet'}. Upload a feedback sheet (e.g. Google Form responses) with Import: each row lands here with the file it came from.</p>
+    ${peopleList()}${table('feedback', F, [{ f: 'date', label: 'Date', w: '100px' }, { f: 'person', label: 'From', w: '150px', list: 1 }, { f: 'source', label: 'Source', w: '140px' },
+      { f: 'type', label: 'Type', type: 'select', opts: ['Feedback', 'Query', 'Complaint', 'Suggestion', 'Praise'] }, { f: 'rating', label: 'Rating', type: 'number', w: '60px' },
+      { f: 'text', label: 'What they said', type: 'area', w: '280px' }, { f: 'status', label: 'Status', type: 'select', opts: ['New', 'Responded', 'Closed'] }, { f: 'response', label: 'Our response / action', type: 'area' }],
+      { addLabel: 'Add query / feedback', set: { status: 'New', type: 'Feedback', source: 'Typed in', date: new Date().toISOString().slice(0, 10) } })}</div>`;
+}
+const postChecklist = () => `<div class="card"><h3>Post-production checklist</h3>${bar(cnt(S.checklist, 'done'), S.checklist.length, 'Done')}
+  ${table('checklist', S.checklist, [{ f: 'done', label: '✓', type: 'check' }, { f: 'text', label: 'Task', w: '340px' }, { f: 'owner', label: 'Owner' }, { f: 'due', label: 'Due', type: 'date' }, { f: 'notes', label: 'Notes', w: '220px' }], { addLabel: 'Add task' })}</div>`;
+function postWrapup() {
+  const L = S.logistics.filter(x => x.done && x.side === 'Organiser'), A = S.assets, B = S.budget;
+  return `<div class="card"><h3>Pack back & return <span class="muted">organiser items marked ready in Pre-event › Logistics</span></h3>${bar(cnt(L, 'returned'), L.length, 'Packed back / returned')}
+      ${table('logistics', L, [{ f: 'returned', label: 'Packed back', type: 'check' }, { f: 'text', label: 'Item', type: 'ro' }, { f: 'group', label: 'Group', type: 'ro' }, { f: 'who', label: 'Owner', type: 'ro' }, { f: 'wrapNotes', label: 'Missing / damaged?', w: '220px' }],
+        { noAdd: 1, noDel: 1, empty: 'Tick items as ready in Pre-event › Logistics and they show up here to pack back.' })}</div>
+    <div class="card"><h3>Equipment & assets</h3>${bar(cnt(A, 'returned'), A.length, 'Returned')}<p class="muted">Full register in Media & assets › Asset register.</p>
+      ${table('assets', A.filter(x => !x.returned), [{ f: 'returned', label: 'Returned', type: 'check' }, { f: 'item', label: 'Asset', type: 'ro' }, { f: 'owner', label: 'Owner', type: 'ro' }, { f: 'condition', label: 'Condition', w: '140px' }], { noAdd: 1, noDel: 1, empty: 'All assets returned.' })}</div>
+    ${pub() ? '' : `<div class="card"><h3>Vendor settlement</h3>${bar(cnt(B, 'paidOut'), B.length, 'Paid out')}
+      ${table('budget', B, [{ f: 'paidOut', label: 'Paid out', type: 'check' }, { f: 'item', label: 'Item', type: 'ro' }, { f: 'category', label: 'Category', type: 'ro' }, { f: 'actual', label: 'Actual ₹', type: 'number', w: '100px' }], { noAdd: 1, noDel: 1, empty: 'Add expenses in Pre-event › Budget.' })}</div>`}`;
+}
+
+// ---------------- MEDIA & ASSETS ----------------
+function viewMedia() {
+  const T = S.testimonials, A = S.assets;
+  return `<div class="stats">${stat('Photo batches on Drive', cnt(S.photos, 'uploaded') + ' / ' + S.photos.length)}${stat('Videos on Drive', cnt(S.videos, 'uploaded') + ' / ' + S.videos.length)}
+      ${stat('Testimonials', T.length)}${stat('Testimonials edited', cnt(T, 'edited') + ' / ' + T.length)}${stat('Assets out', A.filter(a => a.out && !a.returned).length, A.some(a => a.out && !a.returned))}</div>`
+    + subnav('media', { photos: '📷 Photos', videos: '🎬 Videos', testimonials: '🎤 Testimonials', assets: '🧰 Asset register' })
+    + { photos: mediaPhotos, videos: mediaVideos, testimonials: mediaTestimonials, assets: mediaAssets }[ui.sub.media]();
+}
+const mediaPhotos = () => `<div class="card"><h3>Photos: collect → scale → upload to Drive</h3>${bar(cnt(S.photos, 'collected'), S.photos.length, 'Collected')}${bar(cnt(S.photos, 'scaled'), S.photos.length, 'Scaled')}${bar(cnt(S.photos, 'uploaded'), S.photos.length, 'Uploaded to Drive')}
+  ${table('photos', S.photos, [{ f: 'label', label: 'Batch (day / session)', w: '180px' }, { f: 'owner', label: 'Owner' }, { f: 'count', label: '# photos', type: 'number', w: '70px' }, { f: 'collected', label: 'Collected', type: 'check' },
+    { f: 'scaled', label: 'Scaled', type: 'check' }, { f: 'uploaded', label: 'Uploaded to Drive', type: 'check' }, { f: 'link', label: 'Drive link', link: 1, w: '220px' }], { addLabel: 'Add batch' })}
+  <button data-act="mediabatches">Create a photo + video batch for each agenda day</button></div>`;
+const mediaVideos = () => `<div class="card"><h3>Videos: collect footage → edit → upload to Drive</h3>${bar(cnt(S.videos, 'edited'), S.videos.length, 'Edited')}${bar(cnt(S.videos, 'uploaded'), S.videos.length, 'Uploaded to Drive')}
+  ${table('videos', S.videos, [{ f: 'label', label: 'Video (day / session / reel)', w: '200px' }, { f: 'owner', label: 'Editor' }, { f: 'collected', label: 'Footage collected', type: 'check' },
+    { f: 'edited', label: 'Edited', type: 'check' }, { f: 'uploaded', label: 'Uploaded to Drive', type: 'check' }, { f: 'link', label: 'Drive link', link: 1, w: '220px' }], { addLabel: 'Add video' })}</div>`;
+function mediaTestimonials() {
+  const T = S.testimonials, n = T.length;
+  return `<div class="card"><h3>Testimonials</h3>
+    <div class="summary"><span>Taken any? <b>${n ? 'Yes' : 'No'}</b></span><span>How many? <b>${n}</b></span><span>Edited? <b>${cnt(T, 'edited')} / ${n}</b></span><span>Uploaded? <b>${cnt(T, 'uploaded')} / ${n}</b></span></div>
+    ${peopleList()}${table('testimonials', T, [{ f: 'person', label: 'Person', w: '180px', list: 1 }, { f: 'day', label: 'Day' }, { f: 'recorded', label: 'Recorded', type: 'check' },
+      { f: 'edited', label: 'Edited', type: 'check' }, { f: 'uploaded', label: 'Uploaded to Drive', type: 'check' }, { f: 'link', label: 'Drive link', link: 1, w: '220px' }], { addLabel: 'Add testimonial', set: { recorded: true } })}</div>`;
+}
+const mediaAssets = () => `<div class="card"><h3>Asset register <span class="muted">equipment, rentals, props: who has it, did it come back</span></h3>${bar(cnt(S.assets, 'returned'), S.assets.length, 'Returned')}
+  ${table('assets', S.assets, [{ f: 'item', label: 'Asset', w: '200px' }, { f: 'category', label: 'Category' }, { f: 'qty', label: 'Qty', type: 'number', w: '50px' }, { f: 'owner', label: 'Owner / with' },
+    { f: 'out', label: 'Taken out', type: 'check' }, { f: 'returned', label: 'Returned', type: 'check' }, { f: 'condition', label: 'Condition' }, { f: 'notes', label: 'Notes', w: '200px' }], { addLabel: 'Add asset' })}</div>`;
+
+// ---------------- TEMPLATES ----------------
+const viewTemplates = () => `<div class="card"><h3>Templates</h3><p>Download a template, fill it in Excel or Google Sheets, then click <b>Import</b>. The app reads the column headers and fills the right section automatically.
+    In Google Sheets: <i>File › Import › Upload</i> to open it, and <i>File › Download › Microsoft Excel (.xlsx)</i> to bring it back.</p>
+    <button class="primary" data-tpl="all">⬇ Download all templates (one workbook)</button></div>`
+  + TEMPLATES.map((t, i) => `<div class="card"><h3>${esc(t.phase)}</h3><p>${esc(t.about)}</p>
+    ${t.sheets.map(([n, rows]) => `<div style="margin:6px 0"><b>${esc(n)}</b>: ${rows[0].map(h => `<code>${esc(h)}</code>`).join(' ')}</div>`).join('')}
+    <button data-tpl="${i}">⬇ ${esc(t.file)}</button></div>`).join('')
+  + `<div class="card"><h3>Word documents</h3><p>A Word doc with <b>bold headings</b> and bullet lists (e.g. "Things to carry") becomes logistics checklist groups. Tables inside Word docs are read like sheets.</p></div>`;
+function downloadTpl(which) {
+  const list = which === 'all' ? TEMPLATES : [TEMPLATES[which]], wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(HOWTO.map(x => [x])), 'How to use');
+  for (const t of list) for (const [name, rows] of t.sheets) {
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = rows[0].map((h, k) => ({ wch: Math.min(40, Math.max(12, ...rows.map(r => String(r[k] ?? '').length + 2))) }));
+    XLSX.utils.book_append_sheet(wb, ws, name);
+  }
+  XLSX.writeFile(wb, which === 'all' ? 'Event-tracker-all-templates.xlsx' : list[0].file);
+}
+
+// ---------------- events ----------------
+const val = id => { const el = document.getElementById(id), v = el.value.trim(); el.value = ''; return v; };
+function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 6000); }
+const ACT = {
+  newgroup() { const g = val('newgroup'); if (g) S.logistics.push({ id: uid(), side: ui.logiSide, group: g, text: '' }); },
+  addsession() { S.agenda.push({ id: uid(), day: ui.day || 'Day 1', time: '', what: 'New session', who: '', needs: [], status: 'Upcoming' }); },
+  logreq() { const p = val('rq-p'), t = val('rq-t'); if (t) { S.followups.push({ id: uid(), person: p, reason: t, status: 'Open', notes: 'Logged during ' + (ui.day || 'event') }); toast('Added to Post-event › Follow-ups'); } },
+  logtest() { S.testimonials.push({ id: uid(), person: val('ts-p'), recorded: true, day: ui.day || '' }); toast('Testimonial logged in Media & assets'); },
+  logmed() { const p = val('md-p'), t = val('md-t'); if (t || p) { S.incidents.push({ id: uid(), person: p, what: t, when: new Date().toLocaleString('en-IN'), status: 'Open' }); toast('Incident logged in During › Medical & safety'); } },
+  adddue() { const n = val('due-p'), p = S.people.find(x => norm(x.name) === norm(n)); p ? (p.payStatus ??= 'Pending') : toast('No person named ' + n); },
+  mediabatches() { for (const d of S.agenda.length ? days() : ['Day 1']) for (const k of ['photos', 'videos']) if (!S[k].some(x => (x.label || '').startsWith(d))) S[k].push({ id: uid(), label: d }); },
+  pendingonly() { ui.pendingOnly = !ui.pendingOnly; },
+  rmlogo() { S.logo = ''; },
+  save() {
+    document.querySelectorAll('[data-addneed],[data-followup]').forEach(el => {
+      const t = el.value.trim(); if (!t) return;
+      if (el.dataset.addneed) S.agenda.find(x => x.id === el.dataset.addneed).needs.push({ t, done: false });
+      else { const p = S.people.find(x => x.id === el.dataset.followup); (p.followups ??= []).unshift({ d: new Date().toLocaleString('en-IN'), t }); }
+    });
+    toast('✓ Saved');
+  },
+  reveal() {
+    if (pub() && !confirm('Show real payment amounts on screen?\n\nMake sure the screen is not being projected or shared.')) return;
+    ui.reveal = !ui.reveal; toast(pub() ? 'Display mode on: payment info hidden' : 'Payment info visible. Switch back to Display mode before presenting.');
+  },
+  export() {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(S, null, 1)], { type: 'application/json' }));
+    a.download = (S.event || 'event').replace(/[^\w-]+/g, '_') + '-backup.json'; a.click();
+  },
+  reset() {
+    if (!confirm(S.seeded ? 'Throw away all changes to this event and go back to the original sheet data?' : `Clear all data in "${S.event}"? Take a Backup first if you need it.`)) return;
+    S = S.seeded ? seed() : Object.assign(blank(), { event: S.event, logo: S.logo, info: S.info });
+  },
+  addevent() {
+    const n = prompt('Name of the new event (e.g. TNDS)')?.trim(); if (!n) return;
+    save(); const id = uid(); index.events.push({ id, name: n }); index.current = id;
+    S = Object.assign(blank(), { event: n }); Object.assign(ui, { phase: 'pre', day: null, q: '' });
+  },
+  dupevent() {
+    document.getElementById('dupsrc').textContent = S.event;
+    document.getElementById('dupname').value = S.event + ' (copy)';
+    document.getElementById('dupdlg').showModal();
+  },
+  rename() { const n = prompt('Rename event', S.event)?.trim(); if (n) S.event = n; },
+  delevent() {
+    if (index.events.length === 1) return toast('This is the only event. Add another one before deleting it.');
+    if (!confirm(`Delete "${S.event}" and ALL its data permanently? This cannot be undone. Take a Backup first if unsure.`)) return;
+    store.removeItem(EVK(index.current)); index.events = index.events.filter(e => e.id !== index.current);
+    index.current = index.events[0].id; S = hydrate(load(EVK(index.current), {})); ui.day = null;
+  },
+};
+document.addEventListener('click', e => {
+  document.querySelectorAll('details.menu[open]').forEach(m => { if (!m.contains(e.target) || e.target.closest('.pop button')) m.open = false; });
+  const b = e.target.closest('button'); if (!b) return; const d = b.dataset;
+  if (d.phase) ui.phase = d.phase;
+  else if (d.sub) { const [p, k] = d.sub.split(':'); ui.sub[p] = k; }
+  else if (d.day != null) ui.day = d.day;
+  else if (d.side) ui.logiSide = d.side;
+  else if (d.move != null) S.logistics.filter(x => (x.group || 'General') === d.move).forEach(x => x.side = x.side === 'Organiser' ? 'Participant' : 'Organiser');
+  else if (d.tpl != null) return downloadTpl(d.tpl === 'all' ? 'all' : +d.tpl);
+  else if (d.add) S[d.add].push({ id: uid(), ...JSON.parse(d.set || '{}') });
+  else if (d.del) { if (!confirm('Delete this row?')) return; S[d.del] = S[d.del].filter(x => x.id !== d.id); }
+  else if (d.sdone) { S.agenda.find(x => x.id === d.sdone).status = 'Done'; ui.open.delete(d.sdone); }
+  else if (d.merge) {
+    const [a, c] = d.merge.split(':').map(id => S.people.find(p => p.id === id));
+    for (const [k, v] of Object.entries(a)) if (k !== 'id' && k !== 'name' && v !== '' && v != null && (c[k] == null || c[k] === '')) c[k] = v;
+    S.people = S.people.filter(p => p !== a);
+  }
+  else if (d.notdup) { const [a, c] = d.notdup.split(':'); (S.people.find(p => p.id === a).notDup ??= []).push(c); }
+  else if (ACT[d.act]) ACT[d.act]();
+  else return;
+  save(); render();
+});
+document.addEventListener('toggle', e => { const id = e.target.dataset?.sid; if (id) e.target.open ? ui.open.add(id) : ui.open.delete(id); }, true);
+document.addEventListener('change', e => {
+  const t = e.target, d = t.dataset;
+  if (t.id === 'evsel') { switchTo(t.value); Object.assign(ui, { day: null, q: '' }); render(); return; }
+  if ('evname' in d) { S.event = t.value.trim() || S.event; save(); render(); return; }
+  if (d.info) { S.info[d.info] = t.value; save(); if (t.type === 'date') render(); return; }
+  if (d.f) {
+    const it = S[d.coll].find(x => x.id === d.id);
+    it[d.f] = t.type === 'checkbox' ? t.checked : t.type === 'number' ? num(t.value) : t.value;
+    if (d.f === 'paymentDone') {
+      if (t.checked && it.pending > 0) { toast(`Moved ${money(it.pending)} from pending to collected for ${it.name}`); it.paid = (it.paid || 0) + it.pending; it.pending = 0; }
+      if (it.payStatus) it.payStatus = t.checked ? 'Cleared' : 'Pending'; // keep Post-event payments in sync
+    }
+    if (d.f === 'payStatus') it.paymentDone = t.value === 'Cleared';
+    save(); if (t.type === 'checkbox' || t.tagName === 'SELECT' || t.type === 'number' || t.type === 'date') render(); // text fields: save only, keep focus
+  } else if (d.need) { const [id, i] = d.need.split(':'); S.agenda.find(x => x.id === id).needs[i].done = t.checked; save(); render(); }
+  else if (d.std) { const s = S.agenda.find(x => x.id === d.std); (s.std ??= {})[d.t] = t.checked; save(); render(); }
+});
+document.addEventListener('keydown', e => {
+  const t = e.target, d = t.dataset;
+  if (e.key !== 'Enter' || !(d.addneed || d.followup) || !t.value.trim()) return;
+  if (d.addneed) S.agenda.find(x => x.id === d.addneed).needs.push({ t: t.value.trim(), done: false });
+  else { const p = S.people.find(x => x.id === d.followup); (p.followups ??= []).unshift({ d: new Date().toLocaleString('en-IN'), t: t.value.trim() }); p.payStatus ??= 'Pending'; }
+  save(); render();
+});
+document.addEventListener('input', e => {
+  const d = e.target.dataset || {};
+  if (d.f || d.info || 'evname' in d || d.addneed || d.followup)
+    document.querySelectorAll('.saved').forEach(x => { x.textContent = '● Not saved yet, click Save'; x.classList.add('dirty'); });
+  if (e.target.id !== 'q') return;
+  ui.q = e.target.value; render();
+  const q = document.getElementById('q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length);
+});
+document.getElementById('dupdlg').addEventListener('close', e => {
+  const dlg = e.target, name = document.getElementById('dupname').value.trim();
+  if (dlg.returnValue !== 'ok' || !name) return;
+  const keep = dlg.querySelector('[name=dupmode]:checked').value === 'structure', from = S.event;
+  save(); const id = uid(); const copy = duplicateEvent(S, name, keep);
+  index.events.push({ id, name }); index.current = id; S = copy;
+  Object.assign(ui, { phase: 'pre', day: null, q: '' }); ui.sub.pre = 'info'; save(); render();
+  toast(`Created "${name}" from "${from}"${keep ? ' (structure copied, all unticked)' : ' (empty)'}.\nPick the dates, then Import your sheets.`);
+});
+document.getElementById('logofile').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try { // shrink to max 400px so it fits in browser storage
+    const img = await createImageBitmap(f), k = Math.min(1, 400 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+    c.width = img.width * k; c.height = img.height * k; c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    S.logo = c.toDataURL('image/png');
+  } catch { S.logo = await new Promise(ok => { const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(f); }); } // e.g. SVG
+  save(); render(); toast('Logo saved for ' + S.event);
+});
+document.getElementById('file').addEventListener('change', async e => {
+  const msgs = [];
+  for (const f of e.target.files) {
+    try {
+      const buf = await f.arrayBuffer(), c = {};
+      if (/\.json$/i.test(f.name)) { S = hydrate(JSON.parse(new TextDecoder().decode(buf))); msgs.push(`${f.name}: backup restored`); continue; }
+      if (/\.docx$/i.test(f.name)) await importDocx(buf, c);
+      else { const wb = XLSX.read(buf); for (const n of wb.SheetNames) importRows(XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: null, raw: true }), n, c, f.name); }
+      const got = Object.entries(c).filter(([, v]) => v).map(([k, v]) => `${v} ${LABELS[k] || k}`);
+      msgs.push(`${f.name}: ${got.length ? got.join(', ') : 'nothing recognised. Check the column headers against ⬇ Templates.'}`);
+    } catch (err) { msgs.push(`${f.name}: could not read (${err.message})`); }
+  }
+  e.target.value = ''; save(); render(); toast(msgs.join('\n'));
+});
+render();
+</script>
+</body>
+</html>
